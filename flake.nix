@@ -1,6 +1,6 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs";
-  inputs.capacitor.url = "github:flox/capacitor";
+  inputs.capacitor.url = "github:flox/capacitor/ysndr";
   inputs.flake-utils.url = "github:numtide/flake-utils";
 
   outputs = { self, nixpkgs, capacitor, flake-utils }:
@@ -24,9 +24,10 @@
         }
       );
 
-      capacitor-apps = capacitor.lib.makeApps self nixpkgs;
+      capacitor-apps = capacitor.lib.makeApps combined nixpkgs;
 
+      combined = nixpkgs.lib.recursiveUpdate flake capacitor-apps;
     in
-    nixpkgs.lib.recursiveUpdate flake capacitor-apps;
+      combined;
 
 }

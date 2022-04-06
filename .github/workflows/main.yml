@@ -1,0 +1,83 @@
+name: "Create built versions cache"
+
+on:
+  workflow_dispatch:
+    inputs:
+       system:
+        description: "Target system"
+        required: true
+        type: string
+        default: "x86_64-linux"
+    # secrets:
+      # AWS_ACCESS_KEY_ID:
+      #   required: true
+      # AWS_SECRET_ACCESS_KEY:
+      #   required: true
+      # GIT_TOKEN:
+      #   required: false
+
+jobs:
+  eval_cache:
+    runs-on: ubuntu-latest
+    concurrency: ${{ github.ref}}
+    steps:
+      - uses: actions/checkout@v2.4.0
+      
+      - name: Cache multiple paths
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/nix
+          key: ${{ runner.os }}-${{ github.run_id}}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      - uses: cachix/install-nix-action@v15
+        with:
+          extra_nix_config: |
+            access-tokens = ${{ secrets.GIT_TOKEN }}
+            experimental-features = nix-command flakes
+      
+      - uses: keithweaver/aws-s3-github-action@v1.0.0
+        name: copy cachedb from s3
+        continue-on-error: true
+        with:
+          command: cp
+          source: s3://versions-cache/flox-examples.${{github.event.inputs.system}}.db
+          destination: flox-examples.${{github.event.inputs.system}}.db
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1
+
+      - name: db permissions
+        run: |
+          sudo chown runner flox-examples.${{github.event.inputs.system}}.db
+          sudo chmod 664 flox-examples.${{github.event.inputs.system}}.db
+        continue-on-error: true
+
+      - name: Eval linux
+        run: nix run .#eval ./#packages.${{github.event.inputs.system}} | tee github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+     
+      - name: Build cache linux
+        run: |
+          nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d flox-examples.${{github.event.inputs.system}}.db activate < github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+      
+      - uses: keithweaver/aws-s3-github-action@v1.0.0
+        name: copy update cachedb overwrite back to s3
+        with:
+          command: cp
+          source: flox-examples.${{github.event.inputs.system}}.db
+          destination: s3://versions-cache/flox-examples.${{github.event.inputs.system}}.db
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1
+
+      - uses: keithweaver/aws-s3-github-action@v1.0.0
+        name: copy update cachedb overwrite back to s3
+        with:
+          command: cp
+          source: ./github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+          destination: s3://versions-cache/github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1

@@ -38,7 +38,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
-      - uses: ./.github/actions/update-cache
+      - uses: ysndr/flox-integration-action@master
         with:
           system: ${{github.event.inputs.system}}
           substituter: https://storehouse.beta.floxdev.com/project/flox-examples

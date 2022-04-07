@@ -1,0 +1,93 @@
+name: Update Built Cache State
+description: TODO
+inputs:
+  system:
+    description: "Target system"
+    required: true
+    default: "x86_64-linux"
+  
+  aws-bucket:
+    description: "AWS S3 Bucket"
+    required: true
+    default: "versions-cache"
+  
+  aws_access_key_id:
+    required: true
+    description: TODO
+  aws_secret_access_key:
+    required: true
+    description: TODO
+  git_token:
+    required: false
+    description: TODO
+
+
+runs:
+  using: composite
+  steps:
+    - id: config
+      shell: bash
+      run: |
+        # FIXME: make generic over github instances (GH Enterprise)
+        # TODO: use `?ref=..`
+        FLAKE_REF="github:${{github.repository}}/${{github.ref_name}}#packages.${{inputs.system}}"
+        FLAKE_REF="$(echo ${FLAKE_REF} | tr / _)"
+        DB_PATH="$FLAKE_REF.db"
+        EVAL_RESULT="$FLAKE_REF.json"
+
+        echo "::set-output name=flake-ref::${FLAKE_REF}"
+        echo "::set-output name=db-path::${DB_PATH}"
+        echo "::set-output name=eval-result::${EVAL_RESULT}"
+
+    - uses: cachix/install-nix-action@v15
+      with:
+        extra_nix_config: |
+          access-tokens = ${{ secrets.GIT_TOKEN }}
+          experimental-features = nix-command flakes
+
+    - uses: keithweaver/aws-s3-github-action@v1.0.0
+      name: copy cachedb from s3
+      continue-on-error: true
+      with:
+        command: cp
+        source: s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
+        destination: ${{steps.config.outputs.db-path}}
+        aws_access_key_id: ${{ inputs.aws_access_key_id }}
+        aws_secret_access_key: ${{ inputs.aws_secret_access_key }}
+        aws_region: us-east-1
+
+    - name: db permissions
+      shell: bash
+      run: |
+        sudo chown runner ${{steps.config.outputs.db-path}}
+        sudo chmod 664 ${{steps.config.outputs.db-path}}
+      continue-on-error: true
+
+    - name: Eval linux
+      shell: bash
+      run: nix run .#eval ./#packages.${{inputs.system}} | tee ${{steps.config.outputs.eval-result}}
+
+    - name: Build cache linux
+      shell: bash
+      run: |
+        nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d ${{steps.config.outputs.db-path}} activate < ${{steps.config.outputs.eval-result}}
+
+    - uses: keithweaver/aws-s3-github-action@v1.0.0
+      name: copy update cachedb overwrite back to s3
+      with:
+        command: cp
+        source: ${{steps.config.outputs.db-path}}
+        destination: s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
+        aws_access_key_id: ${{ inputs.aws_access_key_id }}
+        aws_secret_access_key: ${{ inputs.aws_secret_access_key }}
+        aws_region: us-east-1
+
+    - uses: keithweaver/aws-s3-github-action@v1.0.0
+      name: copy update cachedb overwrite back to s3
+      with:
+        command: cp
+        source: ./${{steps.config.outputs.eval-result}}
+        destination: s3://${{inputs.aws-bucket}}/${{steps.config.outputs.eval-result}}
+        aws_access_key_id: ${{ inputs.aws_access_key_id }}
+        aws_secret_access_key: ${{ inputs.aws_secret_access_key }}
+        aws_region: us-east-1

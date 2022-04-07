@@ -51,7 +51,7 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: us-east-1
-      run: nix shell nixpkgs\#awscli2 -c aws s3 -- cp s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}} ./${{steps.config.outputs.db-path}} || true
+      run: nix shell nixpkgs\#awscli2 -c aws s3 cp s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}} ./${{steps.config.outputs.db-path}} || true
 
     - name: db permissions
       shell: bash
@@ -77,7 +77,7 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: us-east-1
-      run: nix shell nixpkgs\#awscli2 -c aws s3 -- cp ./${{steps.config.outputs.db-path}} s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
+      run: nix shell nixpkgs\#awscli2 -c aws s3 cp ./${{steps.config.outputs.db-path}} s3://${{inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
 
     - name: copy update eval cache overwrite back to s3
       shell: bash
@@ -85,4 +85,4 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: us-east-1
-      run: nix shell nixpkgs\#awscli2 -c aws s3 -- cp ./${{steps.config.outputs.eval-result}} s3://${{inputs.aws-bucket}}/${{steps.config.outputs.eval-result}}
+      run: nix shell nixpkgs\#awscli2 -c aws s3 cp ./${{steps.config.outputs.eval-result}} s3://${{inputs.aws-bucket}}/${{steps.config.outputs.eval-result}}

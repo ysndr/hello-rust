@@ -41,6 +41,7 @@ jobs:
       - uses: ./.github/actions/update-cache
         with:
           system: ${{github.event.inputs.system}}
+          substituter: https://storehouse.beta.floxdev.com/project/flox-examples
           aws-bucket: ${{github.event.inputs.aws-bucket}}
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

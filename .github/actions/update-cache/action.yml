@@ -42,7 +42,7 @@ runs:
     - uses: cachix/install-nix-action@v15
       with:
         extra_nix_config: |
-          access-tokens = ${{ secrets.GIT_TOKEN }}
+          access-tokens = ${{ inputs.git_token }}
           experimental-features = nix-command flakes
 
     - uses: keithweaver/aws-s3-github-action@v1.0.0

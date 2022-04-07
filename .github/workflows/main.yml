@@ -29,10 +29,10 @@ jobs:
     steps:
       - id: config
         run: |
-          
           # FIXME: make generic over github instances (GH Enterprise)
           # TODO: use `?ref=..`
           FLAKE_REF="github:${{github.repository}}/${{github.ref_name}}#packages.${{github.event.inputs.system}}"
+          FLAKE_REF="$(echo ${FLAKE_REF} | tr / _)"
           DB_PATH="$FLAKE_REF.db"
           EVAL_RESULT="$FLAKE_REF.json"
 

@@ -27,19 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: ${{ github.ref}}
     steps:
-      - id: config
-        run: |
-          # FIXME: make generic over github instances (GH Enterprise)
-          # TODO: use `?ref=..`
-          FLAKE_REF="github:${{github.repository}}/${{github.ref_name}}#packages.${{github.event.inputs.system}}"
-          FLAKE_REF="$(echo ${FLAKE_REF} | tr / _)"
-          DB_PATH="$FLAKE_REF.db"
-          EVAL_RESULT="$FLAKE_REF.json"
-
-          echo "::set-output name=flake-ref::${FLAKE_REF}"
-          echo "::set-output name=db-path::${DB_PATH}"
-          echo "::set-output name=eval-result::${EVAL_RESULT}"
-
       - uses: actions/checkout@v2.4.0
       
       - name: Cache multiple paths
@@ -51,52 +38,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-
 
-      - uses: cachix/install-nix-action@v15
+      - uses: ysndr/flox-integration-action@master
         with:
-          extra_nix_config: |
-            access-tokens = ${{ secrets.GIT_TOKEN }}
-            experimental-features = nix-command flakes
-      
-      - uses: keithweaver/aws-s3-github-action@v1.0.0
-        name: copy cachedb from s3
-        continue-on-error: true
-        with:
-          command: cp
-          source: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
-          destination: ${{steps.config.outputs.db-path}}
+          system: ${{github.event.inputs.system}}
+          substituter: https://storehouse.beta.floxdev.com/project/flox-examples
+          aws-bucket: ${{github.event.inputs.aws-bucket}}
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws_region: us-east-1
-
-      - name: db permissions
-        run: |
-          sudo chown runner ${{steps.config.outputs.db-path}}
-          sudo chmod 664 ${{steps.config.outputs.db-path}}
-        continue-on-error: true
-
-      - name: Eval linux
-        run: nix run .#eval ./#packages.${{github.event.inputs.system}} | tee ${{steps.config.outputs.eval-result}}
-     
-      - name: Build cache linux
-        run: |
-          nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d ${{steps.config.outputs.db-path}} activate < ${{steps.config.outputs.eval-result}}
-      
-      - uses: keithweaver/aws-s3-github-action@v1.0.0
-        name: copy update cachedb overwrite back to s3
-        with:
-          command: cp
-          source: ${{steps.config.outputs.db-path}}
-          destination: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
-          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws_region: us-east-1
-
-      - uses: keithweaver/aws-s3-github-action@v1.0.0
-        name: copy update cachedb overwrite back to s3
-        with:
-          command: cp
-          source: ./${{steps.config.outputs.eval-result}}
-          destination: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.eval-result}}
-          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws_region: us-east-1
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+            

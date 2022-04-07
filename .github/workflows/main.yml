@@ -3,11 +3,17 @@ name: "Create built versions cache"
 on:
   workflow_dispatch:
     inputs:
-       system:
+      system:
         description: "Target system"
         required: true
         type: string
         default: "x86_64-linux"
+      aws-bucket:
+        description: "AWS S3 Bucket"
+        required: true
+        type: string
+        default: "versions-cache"
+
     # secrets:
       # AWS_ACCESS_KEY_ID:
       #   required: true
@@ -21,6 +27,19 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: ${{ github.ref}}
     steps:
+      - id: config
+        run: |
+          
+          # FIXME: make generic over github instances (GH Enterprise)
+          # TODO: use `?ref=..`
+          FLAKE_REF="github:${{github.repository}}/${{github.ref_name}}#packages.${{github.event.inputs.system}}"
+          DB_PATH="$FLAKE_REF.db"
+          EVAL_RESULT="$FLAKE_REF.json"
+
+          echo "::set-output name=flake-ref::${FLAKE_REF}"
+          echo "::set-output name=db-path::${DB_PATH}"
+          echo "::set-output name=eval-result::${EVAL_RESULT}"
+
       - uses: actions/checkout@v2.4.0
       
       - name: Cache multiple paths
@@ -43,31 +62,31 @@ jobs:
         continue-on-error: true
         with:
           command: cp
-          source: s3://versions-cache/flox-examples.${{github.event.inputs.system}}.db
-          destination: flox-examples.${{github.event.inputs.system}}.db
+          source: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
+          destination: ${{steps.config.outputs.db-path}}
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws_region: us-east-1
 
       - name: db permissions
         run: |
-          sudo chown runner flox-examples.${{github.event.inputs.system}}.db
-          sudo chmod 664 flox-examples.${{github.event.inputs.system}}.db
+          sudo chown runner ${{steps.config.outputs.db-path}}
+          sudo chmod 664 ${{steps.config.outputs.db-path}}
         continue-on-error: true
 
       - name: Eval linux
-        run: nix run .#eval ./#packages.${{github.event.inputs.system}} | tee github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+        run: nix run .#eval ./#packages.${{github.event.inputs.system}} | tee ${{steps.config.outputs.eval-result}}
      
       - name: Build cache linux
         run: |
-          nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d flox-examples.${{github.event.inputs.system}}.db activate < github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+          nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d ${{steps.config.outputs.db-path}} activate < ${{steps.config.outputs.eval-result}}
       
       - uses: keithweaver/aws-s3-github-action@v1.0.0
         name: copy update cachedb overwrite back to s3
         with:
           command: cp
-          source: flox-examples.${{github.event.inputs.system}}.db
-          destination: s3://versions-cache/flox-examples.${{github.event.inputs.system}}.db
+          source: ${{steps.config.outputs.db-path}}
+          destination: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.db-path}}
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws_region: us-east-1
@@ -76,8 +95,8 @@ jobs:
         name: copy update cachedb overwrite back to s3
         with:
           command: cp
-          source: ./github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
-          destination: s3://versions-cache/github_flox-examples_hello-rust#packages.${{github.event.inputs.system}}.json
+          source: ./${{steps.config.outputs.eval-result}}
+          destination: s3://${{github.event.inputs.aws-bucket}}/${{steps.config.outputs.eval-result}}
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws_region: us-east-1

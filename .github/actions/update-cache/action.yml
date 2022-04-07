@@ -20,6 +20,9 @@ inputs:
   git_token:
     required: false
     description: TODO
+  substituter:
+    required: false
+    description: TODO
 
 
 runs:
@@ -68,7 +71,9 @@ runs:
     - name: Build cache linux
       shell: bash
       run: |
-        nix run .#checkCache -- --debug -u --substituter https://storehouse.beta.floxdev.com/project/flox-examples -d ${{steps.config.outputs.db-path}} activate < ${{steps.config.outputs.eval-result}}
+        SUBSTITUTER_FLAG=""
+        [[ -z "${{inputs.substituter}}" ]] || SUBSTITUTER_FLAG="--substituter ${{inputs.substituter}}"
+        nix run .#checkCache -- --debug ${SUBSTITUTER_FLAG} -u -d ${{steps.config.outputs.db-path}} activate < ${{steps.config.outputs.eval-result}}
 
 
     - name: copy update cachedb overwrite back to s3
